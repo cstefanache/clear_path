@@ -265,15 +265,36 @@ class OptimizationService:
         def on_generation(ga):
             gen = ga.generations_completed
             if multi_objective:
-                # For multi-objective, record the first objective's best
-                best_fitness = ga.best_solutions_fitness
-                if len(best_fitness) > 0:
-                    if isinstance(best_fitness[0], (tuple, list)):
-                        fitness_history.append([float(v) for v in best_fitness[0]])
-                    else:
-                        fitness_history.append(float(best_fitness[0]))
+                # For NSGA2, evaluate the current population to get the Pareto front snapshot.
+                # We record all non-dominated fitness tuples for this generation.
+                pop = ga.population
+                fn = ga.fitness_func
+                gen_fitness = []
+                for idx, sol in enumerate(pop):
+                    try:
+                        fit = fn(ga, sol, idx)
+                        if hasattr(fit, 'tolist'):
+                            fit = fit.tolist()
+                        if isinstance(fit, (tuple, list)):
+                            gen_fitness.append([float(v) for v in fit])
+                    except Exception:
+                        continue
+                # Record the count of non-dominated solutions as a convergence proxy
+                if gen_fitness:
+                    nd_count = 0
+                    for i, c in enumerate(gen_fitness):
+                        dominated = False
+                        for j, o in enumerate(gen_fitness):
+                            if i == j:
+                                continue
+                            if all(ov >= cv for ov, cv in zip(o, c)) and any(ov > cv for ov, cv in zip(o, c)):
+                                dominated = True
+                                break
+                        if not dominated:
+                            nd_count += 1
+                    fitness_history.append(nd_count)
                 else:
-                    fitness_history.append(None)
+                    fitness_history.append(0)
             else:
                 best = ga.best_solutions_fitness
                 if len(best) > 0:
@@ -367,23 +388,36 @@ def _extract_results(
     if multi_objective:
         population = ga.population
         compiled_fn = ga.fitness_func
-        pareto_solutions = []
+        all_solutions = []
         for idx, sol in enumerate(population):
             try:
                 fit = compiled_fn(ga, sol, idx)
+                if hasattr(fit, 'tolist'):
+                    fit = fit.tolist()
                 if isinstance(fit, (tuple, list)):
                     entry = _solution_to_dict(sol.tolist(), genes)
-                    for i, v in enumerate(fit):
-                        entry[f"objective_{i+1}"] = float(v)
-                    pareto_solutions.append({"solution": entry, "fitness": [float(v) for v in fit]})
+                    fitness_list = [float(v) for v in fit]
+                    for i, v in enumerate(fitness_list):
+                        entry[f"objective_{i+1}"] = v
+                    all_solutions.append({"solution": entry, "fitness": fitness_list})
             except Exception:
                 continue
 
-        pareto_front = _extract_pareto_front(pareto_solutions)
-        # Flatten to list of dicts with gene values + objective values
-        result["pareto_front"] = [p["solution"] for p in pareto_front[:10]]
+        pareto_front = _extract_pareto_front(all_solutions)
+
+        # Build pareto_chart_data: list of {objective_1: ..., objective_2: ...} for scatter plot
+        pareto_chart_data = []
+        for p in pareto_front:
+            point = {}
+            for i, v in enumerate(p["fitness"]):
+                point[f"objective_{i+1}"] = v
+            pareto_chart_data.append(point)
+
+        result["pareto_front"] = [p["solution"] for p in pareto_front]
+        result["pareto_chart"] = pareto_chart_data
         result["top_solutions"] = [p["solution"] for p in pareto_front[:5]]
         result["best_fitness"] = [p["fitness"] for p in pareto_front[:5]]
+        result["num_objectives"] = len(pareto_front[0]["fitness"]) if pareto_front else 2
     else:
         solution, fitness, _ = ga.best_solution()
         result["best_fitness"] = float(fitness)

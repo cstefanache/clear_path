@@ -18,6 +18,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+  ScatterChart, Scatter, ZAxis, Legend,
 } from 'recharts';
 import { apiFetch } from '../api';
 
@@ -365,6 +366,33 @@ export default function ProjectPage() {
 
   const renderConvergenceChart = (resultData) => {
     if (!resultData?.convergence) return null;
+
+    if (resultData.is_multi_objective) {
+      // For multi-objective: convergence tracks Pareto front size over generations
+      const chartData = resultData.convergence.map((val, idx) => ({
+        generation: idx + 1,
+        pareto_size: val,
+      }));
+      return (
+        <Box sx={{ width: '100%', height: 250, mt: 2 }}>
+          <Typography variant="subtitle2" gutterBottom>Pareto Front Size Over Generations</Typography>
+          <ResponsiveContainer>
+            <LineChart data={chartData}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#1e2a36" />
+              <XAxis dataKey="generation" label={{ value: 'Generation', position: 'insideBottom', offset: -5 }} />
+              <YAxis
+                label={{ value: 'Non-dominated Solutions', angle: -90, position: 'insideLeft' }}
+                domain={['auto', 'auto']}
+                allowDecimals={false}
+              />
+              <Tooltip />
+              <Line type="monotone" dataKey="pareto_size" stroke="#00e676" dot={false} strokeWidth={2} />
+            </LineChart>
+          </ResponsiveContainer>
+        </Box>
+      );
+    }
+
     const chartData = resultData.convergence.map((val, idx) => ({
       generation: idx + 1,
       fitness: val,
@@ -374,16 +402,67 @@ export default function ProjectPage() {
         <Typography variant="subtitle2" gutterBottom>Fitness Convergence</Typography>
         <ResponsiveContainer>
           <LineChart data={chartData}>
-            <CartesianGrid strokeDasharray="3 3" />
+            <CartesianGrid strokeDasharray="3 3" stroke="#1e2a36" />
             <XAxis dataKey="generation" label={{ value: 'Generation', position: 'insideBottom', offset: -5 }} />
-            <YAxis 
-              label={{ value: 'Fitness', angle: -90, position: 'insideLeft' }} 
-              domain={['auto', 'auto']} // autoscale Y axis between min/max in data
+            <YAxis
+              label={{ value: 'Fitness', angle: -90, position: 'insideLeft' }}
+              domain={['auto', 'auto']}
               allowDataOverflow={false}
             />
             <Tooltip />
-            <Line type="monotone" dataKey="fitness" stroke="#1976d2" dot={false} strokeWidth={2} />
+            <Line type="monotone" dataKey="fitness" stroke="#00e676" dot={false} strokeWidth={2} />
           </LineChart>
+        </ResponsiveContainer>
+      </Box>
+    );
+  };
+
+  const renderParetoChart = (resultData) => {
+    if (!resultData?.pareto_chart || resultData.pareto_chart.length === 0) return null;
+    const keys = Object.keys(resultData.pareto_chart[0]);
+    if (keys.length < 2) return null;
+    const xKey = keys[0];
+    const yKey = keys[1];
+    return (
+      <Box sx={{ width: '100%', height: 300, mt: 2 }}>
+        <Typography variant="subtitle2" gutterBottom>Pareto Front</Typography>
+        <ResponsiveContainer>
+          <ScatterChart margin={{ top: 10, right: 30, bottom: 20, left: 20 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="#1e2a36" />
+            <XAxis
+              type="number"
+              dataKey={xKey}
+              name={xKey}
+              label={{ value: xKey.replace(/_/g, ' '), position: 'insideBottom', offset: -10 }}
+              domain={['auto', 'auto']}
+            />
+            <YAxis
+              type="number"
+              dataKey={yKey}
+              name={yKey}
+              label={{ value: yKey.replace(/_/g, ' '), angle: -90, position: 'insideLeft' }}
+              domain={['auto', 'auto']}
+            />
+            <ZAxis range={[40, 40]} />
+            <Tooltip
+              cursor={{ strokeDasharray: '3 3' }}
+              content={({ payload }) => {
+                if (!payload || payload.length === 0) return null;
+                const data = payload[0]?.payload;
+                if (!data) return null;
+                return (
+                  <Box sx={{ bgcolor: 'background.paper', border: '1px solid', borderColor: 'divider', p: 1, borderRadius: 1 }}>
+                    {Object.entries(data).map(([k, v]) => (
+                      <Typography key={k} variant="caption" display="block">
+                        {k.replace(/_/g, ' ')}: {typeof v === 'number' ? v.toFixed(4) : v}
+                      </Typography>
+                    ))}
+                  </Box>
+                );
+              }}
+            />
+            <Scatter data={resultData.pareto_chart} fill="#00e676" />
+          </ScatterChart>
         </ResponsiveContainer>
       </Box>
     );
@@ -970,14 +1049,16 @@ export default function ProjectPage() {
 
                   {selectedExecution.result_data?.convergence && renderConvergenceChart(selectedExecution.result_data)}
 
-                  {selectedExecution.result_data?.top_solutions && renderSolutionsTable(
-                    selectedExecution.result_data.top_solutions.slice(0, 5),
-                    'Top 5 Solutions'
-                  )}
+                  {selectedExecution.result_data?.is_multi_objective && renderParetoChart(selectedExecution.result_data)}
 
                   {selectedExecution.result_data?.pareto_front && renderSolutionsTable(
                     selectedExecution.result_data.pareto_front,
                     'Pareto Front Solutions'
+                  )}
+
+                  {!selectedExecution.result_data?.is_multi_objective && selectedExecution.result_data?.top_solutions && renderSolutionsTable(
+                    selectedExecution.result_data.top_solutions.slice(0, 5),
+                    'Top 5 Solutions'
                   )}
 
                   <Box sx={{ mt: 2 }}>
