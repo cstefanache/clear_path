@@ -2,6 +2,17 @@
 
 A web application that lets non-technical users define and run **business optimization problems** using **Genetic Algorithms**. An AI assistant translates natural language descriptions into optimization components (genes, objective functions, constraints) and generates executable Python code for [PyGAD](https://pygad.readthedocs.io/).
 
+<p align="center">
+  <img src="define.png" alt="Define Optimization" width="600"><br>
+  <em>Define your problem in natural language – AI extracts genes, objectives, constraints</em>
+</p>
+
+<p align="center">
+  <img src="interpret.png" alt="Interpret Results" width="600"><br>
+  <em>After optimization, get clear, AI-generated explanations of results</em>
+</p>
+
+
 ## How It Works
 
 1. **Describe your problem** in the chat — the AI extracts genes (decision variables), objectives, and constraints
@@ -13,11 +24,11 @@ A web application that lets non-technical users define and run **business optimi
 ## Architecture
 
 ```
-┌────────────┐     ┌────────────┐     ┌────────────┐
+┌─────────────┐     ┌────────────┐     ┌────────────┐
 │  Frontend   │────▶│  Backend   │────▶│ PostgreSQL │
 │  React/MUI  │◀────│  FastAPI   │◀────│    16      │
 │  :3000      │     │  :8000     │     │  :5432     │
-└────────────┘     └────────────┘     └────────────┘
+└─────────────┘     └────────────┘     └────────────┘
 ```
 
 Three Docker containers orchestrated via `docker-compose`:
