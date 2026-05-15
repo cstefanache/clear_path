@@ -14,6 +14,7 @@ import AutoFixHighIcon from '@mui/icons-material/AutoFixHigh';
 import PsychologyIcon from '@mui/icons-material/Psychology';
 import DeleteIcon from '@mui/icons-material/Delete';
 import EditIcon from '@mui/icons-material/Edit';
+import DownloadIcon from '@mui/icons-material/Download';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import {
@@ -468,12 +469,41 @@ export default function ProjectPage() {
     );
   };
 
-  const renderSolutionsTable = (solutions, label) => {
+  const downloadCSV = (solutions, filename) => {
+    if (!solutions || solutions.length === 0) return;
+    const keys = Object.keys(solutions[0]);
+    const header = keys.join(',');
+    const rows = solutions.map(sol =>
+      keys.map(k => {
+        const val = typeof sol[k] === 'number' ? sol[k].toFixed(4) : String(sol[k] ?? '');
+        return val.includes(',') ? `"${val}"` : val;
+      }).join(',')
+    );
+    const csv = [header, ...rows].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const renderSolutionsTable = (solutions, label, filename) => {
     if (!solutions || solutions.length === 0) return null;
     const keys = Object.keys(solutions[0]);
     return (
       <Box sx={{ mt: 2 }}>
-        <Typography variant="subtitle2" gutterBottom>{label}</Typography>
+        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 0.5 }}>
+          <Typography variant="subtitle2">{label}</Typography>
+          <Button
+            size="small"
+            startIcon={<DownloadIcon />}
+            onClick={() => downloadCSV(solutions, filename || 'solutions.csv')}
+          >
+            Download CSV
+          </Button>
+        </Box>
         <TableContainer>
           <Table size="small">
             <TableHead>
@@ -1053,12 +1083,14 @@ export default function ProjectPage() {
 
                   {selectedExecution.result_data?.pareto_front && renderSolutionsTable(
                     selectedExecution.result_data.pareto_front,
-                    'Pareto Front Solutions'
+                    'Pareto Front Solutions',
+                    `execution_${selectedExecution.id}_pareto_front.csv`
                   )}
 
                   {!selectedExecution.result_data?.is_multi_objective && selectedExecution.result_data?.top_solutions && renderSolutionsTable(
                     selectedExecution.result_data.top_solutions.slice(0, 5),
-                    'Top 5 Solutions'
+                    'Top 5 Solutions',
+                    `execution_${selectedExecution.id}_top5_solutions.csv`
                   )}
 
                   <Box sx={{ mt: 2 }}>
